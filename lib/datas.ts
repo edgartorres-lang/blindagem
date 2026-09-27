@@ -79,3 +79,15 @@ export const formatarDataBR = (d: DataCivil) => `${z(d.dia)}/${z(d.mes)}/${d.ano
 
 /** Data civil → "AAAAMMDD" (campo db da CAPI). */
 export const dataCivilAAAAMMDD = (d: DataCivil) => `${d.ano}${z(d.mes)}${z(d.dia)}`;
+
+/** "hh:mm" em Belém (hora dos balões). */
+export function horaBelem(d = new Date()) {
+  const p = partesBelem(d);
+  return `${z(p.hora)}:${z(p.minuto)}`;
+}
+
+/** "dd/mm/aaaa" em Belém. */
+export function dataBelem(d = new Date()) {
+  const p = partesBelem(d);
+  return `${z(p.dia)}/${z(p.mes)}/${p.ano}`;
+}

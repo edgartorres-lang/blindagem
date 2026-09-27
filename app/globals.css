@@ -78,3 +78,14 @@ input::placeholder {
     transform: none;
   }
 }
+
+/* Estados de hover do protótipo (style-hover). O fundo base fica na classe para o :hover poder sobrescrever. */
+.sn-hv { background: #fff; }
+.sn-hv:hover { background: #f5f8fa; }
+.sn-hv-clear { background: none; }
+.sn-hv-clear:hover { background: #f5f8fa; }
+.sn-hv-sheet { background: none; }
+.sn-hv-sheet:hover { background: #f5f6f6; }
+.sn-hv-round { background: none; }
+.sn-hv-round:hover { background: #f0f2f5; }
+.sn-hv:disabled, .sn-hv-clear:disabled { cursor: default; }
