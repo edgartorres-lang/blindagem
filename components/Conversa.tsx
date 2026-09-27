@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ETAPAS_TEXTO,
   T,
@@ -18,8 +18,10 @@ import {
   type Etapa,
 } from "@/lib/conversa";
 import { aaaammddBelem, dataBelem, horaBelem, idadeEm, parseDataBR } from "@/lib/datas";
+import { montarEstudo, nomeArquivoEstudo } from "@/lib/estudo";
 import { primeiroNome } from "@/lib/format";
-import { enviarLead, type DadosConversa } from "@/lib/lead-client";
+import { enviarLead, type DadosConversa, type ResultadoEnvio } from "@/lib/lead-client";
+import { baixarBlob, gerarPdf, tamanhoTxt, type PdfGerado } from "@/lib/pdf";
 import { PROF, type Profissao, type Sexo } from "@/lib/profissoes";
 import { BarraDigitacao } from "./chat/BarraDigitacao";
 import { BalaoBot, BalaoUsuario, BotoesResposta, Digitando, LinhaMsg } from "./chat/Baloes";
@@ -27,6 +29,8 @@ import { Cabecalho } from "./chat/Cabecalho";
 import { CartaoArquivo, CartaoConsentimento, CartaoConsultoria } from "./chat/Cartoes";
 import { FolhaProfissoes } from "./chat/FolhaProfissoes";
 import { IconCadeado } from "./icons";
+import { PaginasEstudo } from "./pdf/PaginasEstudo";
+import { Visualizador } from "./pdf/Visualizador";
 import { SOMBRA, type Botao, type Fala, type Msg } from "./chat/tipos";
 
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -47,6 +51,9 @@ export default function Conversa() {
   const [sel, setSel] = useState<Profissao | null>(null);
   const [active, setActive] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<PdfGerado | null>(null);
+  const [preview, setPreview] = useState(false);
+  const [zoom, setZoom] = useState(0.45);
 
   // ----- espelhos para as rotinas assíncronas (sempre o valor mais recente) -----
   const etapaRef = useRef<Etapa>("intro");
@@ -57,6 +64,8 @@ export default function Conversa() {
   const nid = useRef(1);
   const rapido = useRef(false);
 
+  const phoneRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const conteudoRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -138,6 +147,8 @@ export default function Conversa() {
     setSheet(false);
     setSel(null);
     setAtivo(null);
+    setPdf(null);
+    setPreview(false);
     const g = gen.current;
     await esperar(250);
     if (g !== gen.current) return;
@@ -254,11 +265,24 @@ export default function Conversa() {
     user(respostaConsentimento(cE, cW));
     if (!(await say([{ text: T.montando }]))) return;
 
-    // Enquanto envia (Turnstile → PDF → POST /api/lead), fica o "digitando".
+    // Enquanto gera o PDF e envia (Turnstile → PDF → POST /api/lead), fica o "digitando".
     // O cartão do arquivo mantém o tempo mínimo do protótipo (+1600 ms).
     setTyping(true);
+    const gerarEEnviar = async (): Promise<ResultadoEnvio> => {
+      const stage = stageRef.current;
+      if (!stage) throw new Error("Páginas do estudo não montadas");
+      const gerado = await gerarPdf(stage);
+      if (g !== gen.current) return { ok: false, motivo: "erro" };
+      setPdf(gerado);
+      // Só em desenvolvimento: permite inspecionar o último PDF pelo console.
+      if (process.env.NODE_ENV !== "production") (window as unknown as { __estudoPdf?: Blob }).__estudoPdf = gerado.blob;
+      return enviarLead(dados, { email: cE, whatsapp: cW }, gerado.blob);
+    };
     const [res] = await Promise.all([
-      enviarLead(dados, { email: cE, whatsapp: cW }),
+      gerarEEnviar().catch((err): ResultadoEnvio => {
+        console.error("Falha ao gerar/enviar o estudo", err instanceof Error ? err.message : err);
+        return { ok: false, motivo: "erro" };
+      }),
       esperar(tempoDigitando(undefined, rapido.current, 1600)),
     ]);
     if (g !== gen.current) return;
@@ -290,20 +314,39 @@ export default function Conversa() {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  // Visualizador do PDF: etapa 4.
-  const abrirEstudo = () => mostrarToast("Visualizador do estudo chega na etapa 4");
+  const abrirEstudo = () => {
+    const w = phoneRef.current?.clientWidth ?? 390;
+    setZoom(Math.min(1, (w - 44) / 794));
+    setPreview(true);
+  };
+
+  const baixar = () => {
+    if (!pdf) return;
+    baixarBlob(pdf.blob, nomeArquivo);
+    mostrarToast("Estudo salvo em Downloads");
+  };
 
   const voltar = () => {
     if (window.history.length > 1) window.history.back();
   };
 
+  // Modelo das páginas do estudo (disponível quando os dados de cálculo estão completos).
+  const modelo = useMemo(
+    () =>
+      d.nome && d.prof && d.sexo && d.idade !== undefined && d.renda
+        ? montarEstudo({ nome: d.nome, prof: d.prof, sexo: d.sexo, idade: d.idade, renda: d.renda })
+        : null,
+    [d.nome, d.prof, d.sexo, d.idade, d.renda],
+  );
+  const nomeArquivo = nomeArquivoEstudo(d.nome ?? "", aaaammddBelem());
+
   // ----- render -----
   const composerOff = !ETAPAS_TEXTO.includes(etapa) || typing;
-  const nomeArquivo = `Estudo Blindagem - ${d.nome ?? ""} - ${aaaammddBelem()}.pdf`;
 
   return (
     <div style={{ minHeight: "100dvh", display: "flex", justifyContent: "center", alignItems: "center" }}>
       <div
+        ref={phoneRef}
         style={{
           position: "relative",
           width: "100%",
@@ -372,7 +415,7 @@ export default function Conversa() {
                       primeiroNome={primeiroNome(d.nome ?? "")}
                       hoje={dataBelem()}
                       nomeArquivo={nomeArquivo}
-                      detalhe="3 páginas · PDF"
+                      detalhe={pdf ? `3 páginas · PDF · ${tamanhoTxt(pdf.tamanho)}` : "3 páginas · PDF"}
                       onAbrir={abrirEstudo}
                     />
                   )}
@@ -420,6 +463,12 @@ export default function Conversa() {
           <FolhaProfissoes selecionada={sel} onSelecionar={setSel} onEnviar={enviarProf} onFechar={() => setSheet(false)} />
         )}
 
+        {preview && modelo && (
+          <Visualizador nomeArquivo={nomeArquivo} zoom={zoom} onFechar={() => setPreview(false)} onBaixar={baixar}>
+            <PaginasEstudo m={modelo} />
+          </Visualizador>
+        )}
+
         {toast && (
           <div
             role="status"
@@ -443,6 +492,12 @@ export default function Conversa() {
           </div>
         )}
       </div>
+      {/* Páginas do estudo fora da tela, usadas para gerar o PDF. */}
+      {modelo && (
+        <div ref={stageRef} aria-hidden="true" style={{ position: "fixed", left: -10000, top: 0, width: 794, pointerEvents: "none" }}>
+          <PaginasEstudo m={modelo} />
+        </div>
+      )}
     </div>
   );
 }

@@ -21,6 +21,7 @@ export type ResultadoEnvio = { ok: true } | { ok: false; motivo: "limite" | "err
 export async function enviarLead(
   _dados: DadosConversa,
   _consent: { email: boolean; whatsapp: boolean },
+  _pdf: Blob,
 ): Promise<ResultadoEnvio> {
   await new Promise((r) => setTimeout(r, 900));
   // Só no stub: ?simular=erro ou ?simular=limite para testar as mensagens de falha.
