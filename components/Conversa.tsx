@@ -416,7 +416,7 @@ export default function Conversa() {
             }}
           >
             <IconCadeado />
-            Seus dados são usados apenas para montar o seu estudo e não são compartilhados com terceiros.
+            Seus dados são usados para montar o seu estudo e para o contato da Setor Norte. Não vendemos seus dados.
           </div>
 
           <div role="log" aria-live="polite" style={{ display: "contents" }}>
