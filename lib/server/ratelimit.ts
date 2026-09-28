@@ -9,8 +9,9 @@ let limites: { hora: Ratelimit; dia: Ratelimit } | null = null;
 
 function upstash() {
   if (limites) return limites;
-  const url = env("UPSTASH_REDIS_REST_URL");
-  const token = env("UPSTASH_REDIS_REST_TOKEN");
+  // Aceita os nomes do Upstash e os criados pela integração da Vercel (KV_REST_API_*).
+  const url = env("UPSTASH_REDIS_REST_URL") ?? env("KV_REST_API_URL");
+  const token = env("UPSTASH_REDIS_REST_TOKEN") ?? env("KV_REST_API_TOKEN");
   if (!url || !token) return null;
   const redis = new Redis({ url, token });
   limites = {
