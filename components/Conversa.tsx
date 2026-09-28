@@ -23,6 +23,8 @@ import { primeiroNome } from "@/lib/format";
 import { enviarLead, type DadosConversa, type ResultadoEnvio } from "@/lib/lead-client";
 import { baixarBlob, gerarPdf, tamanhoTxt, type PdfGerado } from "@/lib/pdf";
 import { PROF, type Profissao, type Sexo } from "@/lib/profissoes";
+import { preCarregarTurnstile } from "@/lib/turnstile-client";
+import { capturarUtms } from "@/lib/utm";
 import { BarraDigitacao } from "./chat/BarraDigitacao";
 import { BalaoBot, BalaoUsuario, BotoesResposta, Digitando, LinhaMsg } from "./chat/Baloes";
 import { Cabecalho } from "./chat/Cabecalho";
@@ -70,6 +72,7 @@ export default function Conversa() {
   const conteudoRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const honeypotRef = useRef<HTMLInputElement>(null);
 
   const setEtapa = (e: Etapa) => {
     etapaRef.current = e;
@@ -159,6 +162,8 @@ export default function Conversa() {
     try {
       rapido.current = new URLSearchParams(window.location.search).get("velocidade") === "rapida";
     } catch {}
+    capturarUtms();
+    preCarregarTurnstile();
     run();
     return () => {
       gen.current++; // cancela falas pendentes (inclusive no duplo mount do StrictMode)
@@ -229,7 +234,7 @@ export default function Conversa() {
         setEtapa("fora");
         setAtivo(null);
         setDados({ nasc: v, idade });
-        // Etapa 5: registrar na planilha com status "Fora do perfil" (sem PDF e sem evento Lead).
+        // Decisão: fora do perfil NÃO é gravado (ainda não há contato nem consentimento LGPD).
         return void say([{ text: T.foraPerfil }, { type: "cta", text: T.foraPerfilCta }]);
       }
       setDados({ nasc: v, idade });
@@ -276,7 +281,10 @@ export default function Conversa() {
       setPdf(gerado);
       // Só em desenvolvimento: permite inspecionar o último PDF pelo console.
       if (process.env.NODE_ENV !== "production") (window as unknown as { __estudoPdf?: Blob }).__estudoPdf = gerado.blob;
-      return enviarLead(dados, { email: cE, whatsapp: cW }, gerado.blob);
+      return enviarLead(dados, { email: cE, whatsapp: cW }, gerado.blob, {
+        honeypot: honeypotRef.current?.value ?? "",
+        nomeArquivo: nomeArquivoEstudo(dados.nome, aaaammddBelem()),
+      });
     };
     const [res] = await Promise.all([
       gerarEEnviar().catch((err): ResultadoEnvio => {
@@ -492,6 +500,15 @@ export default function Conversa() {
           </div>
         )}
       </div>
+      {/* Honeypot anti-robô: invisível para pessoas; se vier preenchido, o servidor descarta o lead. */}
+      <input
+        ref={honeypotRef}
+        type="text"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        style={{ position: "absolute", left: -10000, width: 1, height: 1, opacity: 0 }}
+      />
       {/* Páginas do estudo fora da tela, usadas para gerar o PDF. */}
       {modelo && (
         <div ref={stageRef} aria-hidden="true" style={{ position: "fixed", left: -10000, top: 0, width: 794, pointerEvents: "none" }}>
