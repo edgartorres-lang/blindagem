@@ -36,8 +36,12 @@ const lerCookie = (nome: string) =>
     .find((c) => c.startsWith(nome + "="))
     ?.slice(nome.length + 1) ?? "";
 
+/** fbp/fbc só com cookies aceitos. Sem o cookie _fbc, monta o fbc a partir do fbclid (formato fb.1.<ms>.<fbclid>). */
 export function contextoMedicaoPadrao(cookiesAceitos: boolean): ContextoMedicao {
-  return cookiesAceitos ? { cookiesAceitos, fbp: lerCookie("_fbp"), fbc: lerCookie("_fbc") } : { cookiesAceitos, fbp: "", fbc: "" };
+  if (!cookiesAceitos) return { cookiesAceitos, fbp: "", fbc: "" };
+  const fbclid = lerUtms().fbclid;
+  const fbc = lerCookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : "");
+  return { cookiesAceitos, fbp: lerCookie("_fbp"), fbc };
 }
 
 export async function enviarLead(

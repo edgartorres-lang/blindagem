@@ -126,13 +126,15 @@ export function respostaConsentimento(cE: boolean, cW: boolean) {
 }
 
 export function mensagemFinal(nome: string, email: string, whats: string, cE: boolean, cW: boolean) {
+  // O sistema só envia o PDF por e-mail. O contato por WhatsApp é feito pelo corretor (via n8n).
+  const corretor = `O corretor *Edgar Torres* vai falar com você pelo WhatsApp *${whats}*.`;
   const env =
     cE && cW
-      ? `Enviei uma cópia para *${email}* e para o seu WhatsApp *${whats}*.`
+      ? `Enviei uma cópia para *${email}*. ${corretor}`
       : cE
         ? `Enviei uma cópia para *${email}*.`
         : cW
-          ? `Enviei uma cópia para o seu WhatsApp *${whats}*.`
+          ? `${corretor} Toque no arquivo para abrir ou baixar.`
           : "Toque no arquivo para abrir ou baixar.";
   return `Pronto, ${primeiroNome(nome)}! O seu estudo está aqui em cima. ${env}`;
 }

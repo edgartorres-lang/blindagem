@@ -55,6 +55,12 @@ describe("textos", () => {
     expect(mensagemFinal("Maria Lima", "m@x.com", "(96) 98133-9955", true, false)).toBe(
       "Pronto, Maria! O seu estudo está aqui em cima. Enviei uma cópia para *m@x.com*.",
     );
+    expect(mensagemFinal("Maria Lima", "m@x.com", "(96) 98133-9955", true, true)).toBe(
+      "Pronto, Maria! O seu estudo está aqui em cima. Enviei uma cópia para *m@x.com*. O corretor *Edgar Torres* vai falar com você pelo WhatsApp *(96) 98133-9955*.",
+    );
+    expect(mensagemFinal("Maria Lima", "m@x.com", "(96) 98133-9955", false, true)).toBe(
+      "Pronto, Maria! O seu estudo está aqui em cima. O corretor *Edgar Torres* vai falar com você pelo WhatsApp *(96) 98133-9955*. Toque no arquivo para abrir ou baixar.",
+    );
     expect(mensagemFinal("Maria Lima", "m@x.com", "(96) 98133-9955", false, false)).toBe(
       "Pronto, Maria! O seu estudo está aqui em cima. Toque no arquivo para abrir ou baixar.",
     );

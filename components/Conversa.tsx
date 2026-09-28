@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ETAPAS_TEXTO,
   T,
@@ -20,7 +20,9 @@ import {
 import { aaaammddBelem, dataBelem, horaBelem, idadeEm, parseDataBR } from "@/lib/datas";
 import { montarEstudo, nomeArquivoEstudo } from "@/lib/estudo";
 import { primeiroNome } from "@/lib/format";
-import { enviarLead, type DadosConversa, type ResultadoEnvio } from "@/lib/lead-client";
+import { assinarEscolhaCookies, lerEscolhaCookies } from "@/lib/cookies";
+import { contextoMedicaoPadrao, enviarLead, type DadosConversa, type ResultadoEnvio } from "@/lib/lead-client";
+import { iniciarPixel, rastrear, rastrearLead } from "@/lib/pixel";
 import { baixarBlob, gerarPdf, tamanhoTxt, type PdfGerado } from "@/lib/pdf";
 import { PROF, type Profissao, type Sexo } from "@/lib/profissoes";
 import { preCarregarTurnstile } from "@/lib/turnstile-client";
@@ -30,6 +32,7 @@ import { BalaoBot, BalaoUsuario, BotoesResposta, Digitando, LinhaMsg } from "./c
 import { Cabecalho } from "./chat/Cabecalho";
 import { CartaoArquivo, CartaoConsentimento, CartaoConsultoria } from "./chat/Cartoes";
 import { FolhaProfissoes } from "./chat/FolhaProfissoes";
+import { CookieBanner } from "./CookieBanner";
 import { IconCadeado } from "./icons";
 import { PaginasEstudo } from "./pdf/PaginasEstudo";
 import { Visualizador } from "./pdf/Visualizador";
@@ -73,6 +76,12 @@ export default function Conversa() {
   const inputRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const honeypotRef = useRef<HTMLInputElement>(null);
+
+  // Cookies de medição: o Pixel só carrega depois de "Aceitar". No servidor, "ssr" (não mostra o banner).
+  const escolhaCookies = useSyncExternalStore(assinarEscolhaCookies, lerEscolhaCookies, () => "ssr" as const);
+  useEffect(() => {
+    if (escolhaCookies === "aceito") iniciarPixel();
+  }, [escolhaCookies]);
 
   const setEtapa = (e: Etapa) => {
     etapaRef.current = e;
@@ -186,6 +195,7 @@ export default function Conversa() {
     if (id !== activeRef.current) return;
     const e = etapaRef.current;
     if (e === "intro") {
+      rastrear("ViewContent", { content_name: "Estudo Blindagem" });
       user(b.label);
       ask("nome", [{ text: T.perguntaNome }]);
     } else if (e === "prof") {
@@ -283,6 +293,7 @@ export default function Conversa() {
       if (process.env.NODE_ENV !== "production") (window as unknown as { __estudoPdf?: Blob }).__estudoPdf = gerado.blob;
       return enviarLead(dados, { email: cE, whatsapp: cW }, gerado.blob, {
         honeypot: honeypotRef.current?.value ?? "",
+        medicao: contextoMedicaoPadrao(lerEscolhaCookies() === "aceito"),
         nomeArquivo: nomeArquivoEstudo(dados.nome, aaaammddBelem()),
       });
     };
@@ -306,6 +317,8 @@ export default function Conversa() {
       return;
     }
 
+    // Pixel: Lead com o mesmo eventID enviado à CAPI (deduplicação) e o valor calculado no servidor.
+    rastrearLead(res.totalMensal, res.eventId);
     push({ from: "bot", type: "doc" });
     await esperar(rapido.current ? 60 : 200);
     if (g !== gen.current) return;
@@ -470,6 +483,8 @@ export default function Conversa() {
         {sheet && (
           <FolhaProfissoes selecionada={sel} onSelecionar={setSel} onEnviar={enviarProf} onFechar={() => setSheet(false)} />
         )}
+
+        {escolhaCookies === null && !preview && <CookieBanner />}
 
         {preview && modelo && (
           <Visualizador nomeArquivo={nomeArquivo} zoom={zoom} onFechar={() => setPreview(false)} onBaixar={baixar}>
